@@ -1,0 +1,47 @@
+name: Deploy AZ Portfolio Source
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: laravel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        run: |
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "${{ secrets.LINODE_SSH_KEY }}" > ~/.ssh/id_ed25519
+
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -H "${{ secrets.LINODE_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy Laravel application
+        run: |
+          ssh "${{ secrets.LINODE_USER }}@${{ secrets.LINODE_HOST }}" << 'EOF'
+            set -e
+
+            cd /var/www/html/portfolio-source.adrian-zalewski.com/public_html
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            composer install --no-dev --optimize-autoloader
+
+            php artisan migrate --force
+
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+          EOF
